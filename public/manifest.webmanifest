@@ -1,0 +1,17 @@
+{
+  "name": "Blackbox Sentinel",
+  "short_name": "Sentinel",
+  "description": "High-performance neural interface by the Blackbox Group of Companies.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#050505",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2092/2092218.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

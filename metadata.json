@@ -1,0 +1,6 @@
+{
+  "name": "Blackbox Sentinel",
+  "description": "High-performance neural interface by the Blackbox Group of Companies.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["Real-time persistence", "Neural sync", "Bespoke UI architecture"]
+}

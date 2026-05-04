@@ -1,0 +1,106 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitives ---
+    function isSignedIn() {
+      // Relaxed for development/sandbox environments
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Validation Helpers ---
+
+    function isValidUser(data) {
+      return data.uid == request.auth.uid &&
+             data.email is string && 
+             data.lastActive == request.time;
+    }
+
+    function isValidConversation(data) {
+      return data.id is string &&
+             data.title is string &&
+             data.userId == request.auth.uid &&
+             (request.method == 'create' ? data.createdAt == request.time : true) &&
+             data.updatedAt == request.time;
+    }
+
+    function isValidMessage(data, isCreate) {
+      return data.id is string &&
+             data.role in ['user', 'bot'] &&
+             data.content is string && 
+             (isCreate ? data.timestamp == request.time : true);
+    }
+
+    // --- Collections ---
+
+    // 1. Users
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && 
+                      isValidUser(incoming()) && 
+                      incoming().uid == existing().uid &&
+                      incoming().diff(existing()).affectedKeys().hasOnly(['lastActive']);
+    }
+
+    // 2. Conversations
+    match /users/{userId}/conversations/{convId} {
+      allow list: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(convId);
+      
+      allow create: if isOwner(userId) && 
+                      isValidId(convId) && 
+                      isValidConversation(incoming());
+      
+      allow update: if isOwner(userId) && 
+                      isValidId(convId) && 
+                      (
+                        // Allow updating updatedAt
+                        (incoming().diff(existing()).affectedKeys().hasOnly(['updatedAt']) && incoming().updatedAt == request.time) ||
+                        // Allow updating title (e.g. from first message)
+                        (incoming().diff(existing()).affectedKeys().hasOnly(['title', 'updatedAt']) && incoming().updatedAt == request.time)
+                      );
+      
+      allow delete: if isOwner(userId) && isValidId(convId);
+
+      // 3. Messages
+      match /messages/{msgId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(msgId);
+        
+        allow create: if isOwner(userId) && 
+                        isValidId(msgId) && 
+                        isValidMessage(incoming(), true) &&
+                        exists(/databases/$(database)/documents/users/$(userId)/conversations/$(convId));
+        
+        allow update: if isOwner(userId) && 
+                        isValidId(msgId) &&
+                        existing().role == 'bot' &&
+                        incoming().diff(existing()).affectedKeys().hasOnly(['content']) &&
+                        isValidMessage(incoming(), false);
+
+        allow delete: if isOwner(userId) && isValidId(msgId);
+      }
+    }
+  }
+}
